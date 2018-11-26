@@ -75,13 +75,19 @@ view model =
 type alias Uniforms =
     { u_resolution : Vec2
     , u_time : Float
+    , u_zoomCenter : Vec2
+    , u_zoomSize : Float
+    , u_maxIterations : Int
     }
 
 
 uniforms : Model -> Uniforms
 uniforms model =
-    { u_resolution = vec2 (toFloat model.width) (toFloat model.height)
-    , u_time = model.time
+    { u_resolution = vec2 800.0 800.0
+    , u_time = 0 -- model.time
+    , u_zoomCenter = vec2 0.0 0.0
+    , u_zoomSize = 4
+    , u_maxIterations = 500
     }
 
 
@@ -115,6 +121,7 @@ mesh =
 vertexShader : Shader Vertex Uniforms {}
 vertexShader =
     [glsl|
+        precision highp float;
         attribute vec2 position;
         void main () {
           gl_Position = vec4(position, 0.0, 1.0);
@@ -125,13 +132,24 @@ vertexShader =
 fragmentShader : Shader {} Uniforms {}
 fragmentShader =
     [glsl|
-        precision mediump float;
+       precision highp float;
         uniform vec2 u_resolution;
-        uniform float u_time;
+        uniform vec2 u_zoomCenter;
+        uniform float u_zoomSize;
+        uniform int u_maxIterations;
 
-        void main () {
-          vec2 st = gl_FragCoord.xy / u_resolution.xy;
-          vec3 color = vec3(st.x * abs(sin(u_time)), st.y * abs(cos(u_time)), 1);
-          gl_FragColor = vec4(color, 1.0);
+        void main() {
+          vec2 uv = gl_FragCoord.xy / u_resolution;
+          vec2 c = u_zoomCenter + (uv * 4.0 - vec2(2.0)) * (u_zoomSize / 4.0);
+          vec2 z;
+
+          for(int i = 0; i < 10000; i++) {
+            if (i > u_maxIterations) break;
+            z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+            gl_FragColor = vec4(vec3((float(i) - log(log(length(z)))) / 64.0), 1);
+            if (length(z) > 2.0) return;
+          }
+
+          gl_FragColor = vec4(vec3(0), 1);
         }
     |]
