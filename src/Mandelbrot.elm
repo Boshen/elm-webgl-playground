@@ -34,7 +34,7 @@ type Msg
 
 
 maxIterations =
-    2048
+    256
 
 
 defaultModel : Model
@@ -77,11 +77,13 @@ update msg model =
                         | targetZoomX = model.x - model.zoom / 2 + (offsetX / model.width) * model.zoom
                         , targetZoomY = model.y + model.zoom / 2 - (offsetY / model.height) * model.zoom
                         , zooming = True
+                        , maxIterations = maxIterations
                     }
 
                 StopZoom ->
                     { model
                         | zooming = False
+                        , maxIterations = maxIterations * (5 - ceiling model.zoom) * 5
                     }
 
                 Zooming ->
@@ -89,6 +91,7 @@ update msg model =
                         | x = model.x + 0.1 * (model.targetZoomX - model.x)
                         , y = model.y + 0.1 * (model.targetZoomY - model.y)
                         , zoom = model.zoom * 0.98
+                        , maxIterations = maxIterations
                     }
     in
     ( m, Cmd.none )
@@ -199,43 +202,83 @@ vertexShader =
     |]
 
 
-
--- http://www.iquilezles.org/www/articles/distancefractals/distancefractals.htm<Paste>
-
-
 fragmentShader : Shader {} Uniforms {}
 fragmentShader =
     [glsl|
        precision highp float;
-        uniform vec2 u_resolution;
-        uniform vec2 u_zoomCenter;
-        uniform float u_zoomSize;
-        uniform int u_maxIterations;
+       uniform vec2 u_resolution;
+       uniform vec2 u_zoomCenter;
+       uniform float u_zoomSize;
+       uniform int u_maxIterations;
 
-        void main() {
-          vec2 uv = gl_FragCoord.xy / u_resolution;
-          vec2 c = u_zoomCenter + (uv * 4.0 - vec2(2.0)) * (u_zoomSize / 4.0);
-          vec2 z = vec2(0, 0);
-          vec2 dz = vec2(0, 0);
-          float m2 = 0.0;
-          float di = 0.0;
+       vec3 hsb2rgb( in vec3 c ){
+         vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0), 6.0)-3.0)-1.0, 0.0, 1.0);
+         rgb = rgb*rgb*(3.0-2.0*rgb);
+         return c.z * mix(vec3(1.0), rgb, c.y);
+       }
 
-          for(int i = 0; i < 1000; i++) {
-            if (m2 > 1024.0) {
-              di = 0.0;
-              break;
-            }
-            dz = 2.0 * vec2(z.x * dz.x - z.y * dz.y, z.x * dz.y + z.y * dz.x) + vec2(1.0, 0.0);
-            z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
-            m2 = dot(z, z);
-          }
+       vec3 hsv_to_rgb(in vec3 hsv)
+       {
+         float h = hsv.x;
+         float s = hsv.y;
+         float v = hsv.z;
+         if (v > 1.0) v = 1.0;
+         float hp = h / 60.0;
+         float c = v * s;
+         float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0));
+         vec3 rgb = vec3(0.0);
 
-          float d = 0.5 * sqrt(dot(z,z)/dot(dz,dz))*log(dot(z,z));
-          if (di > 0.5) d = 0.0;
-          float tz = 0.5 * cos(0.225);
-          float zoo = pow(0.5, 13.0 * tz);
-          d = clamp(pow(4.0 * d / zoo, 0.2), 0.0, 1.0);
-          vec3 col = vec3(d);
-          gl_FragColor = vec4(col, 1.0);
-        }
+         if (0.0 <= hp && hp < 1.0) rgb = vec3(c, x, 0.0);
+         if (1.0 <= hp && hp < 2.0) rgb = vec3(x, c, 0.0);
+         if (2.0 <= hp && hp < 3.0) rgb = vec3(0.0, c, x);
+         if (3.0 <= hp && hp < 4.0) rgb = vec3(0.0, x, c);
+         if (4.0 <= hp && hp < 5.0) rgb = vec3(x, 0.0, c);
+         if (5.0 <= hp && hp < 6.0) rgb = vec3(c, 0.0, x);
+
+         float m = v - c;
+         rgb += m;
+         return rgb;
+       }
+
+       float logBase = 1.0 / log(2.0);
+       float logHalfBase = log(0.5) * logBase;
+
+       void main() {
+         vec2 uv = gl_FragCoord.xy / u_resolution;
+         vec2 c = u_zoomCenter + (uv * 4.0 - vec2(2.0)) * (u_zoomSize / 4.0);
+         float cr = c.x;
+         float ci = c.y;
+         float zr = 0.0;
+         float zi = 0.0;
+         float tr = 0.0;
+         float ti = 0.0;
+         float n  = 0.0;
+         float steps = float(u_maxIterations);
+
+         for(int i = 0; i < 10000; i++) {
+           zi = 2.0 * zr * zi + ci;
+           zr = tr - ti + cr;
+           tr = zr * zr;
+           ti = zi * zi;
+           n = float(i);
+           if (n >= steps || tr + ti >= 4.0) {
+             break;
+           }
+         }
+
+         if (n >= steps) {
+           gl_FragColor = vec4(1.0);
+         } else {
+           for (int e = 0; e < 4; e++) {
+             zi = 2.0 * zr * zi + ci;
+             zr = tr - ti + cr;
+             tr = zr * zr;
+             ti = zi * zi;
+           }
+           float v = 5.0 + n - logHalfBase - log(log(tr + ti)) * logBase;
+           vec3 color = hsv_to_rgb(vec3(360.0 * v / steps, 0.8, 20.0 * v / steps));
+           gl_FragColor = vec4(color, 1.0);
+         }
+
+       }
     |]
