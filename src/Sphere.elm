@@ -3,17 +3,14 @@ module Sphere exposing (Model, Msg(..), cmd, defaultModel, init, subscriptions, 
 import Browser exposing (Document)
 import Browser.Dom exposing (..)
 import Browser.Events exposing (..)
-import Debug
 import Html exposing (Html)
 import Html.Attributes exposing (height, style, width)
-import Json.Decode as Decode exposing (Value)
 import List
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Random exposing (..)
 import Task
-import Time exposing (Posix, posixToMillis)
 import WebGL exposing (Mesh, Shader)
 import WebGL.Settings.DepthTest
 
@@ -149,21 +146,15 @@ subscriptions model =
     onAnimationFrameDelta (\dt -> Tick (dt / 1000))
 
 
-view : Model -> Document msg
+view : Model -> Html msg
 view model =
-    let
-        html =
-            WebGL.toHtmlWith
-                [ WebGL.alpha True, WebGL.antialias, WebGL.depth 1 ]
-                [ width (round model.width)
-                , height (round model.height)
-                , style "display" "block"
-                ]
-                (createLightEntity model :: List.map (createSphereEntity model) model.spheres)
-    in
-    { title = "sphere"
-    , body = [ html ]
-    }
+    WebGL.toHtmlWith
+        [ WebGL.alpha True, WebGL.antialias, WebGL.depth 1 ]
+        [ width (round model.width)
+        , height (round model.height)
+        , style "display" "block"
+        ]
+        (createLightEntity model :: List.map (createSphereEntity model) model.spheres)
 
 
 createSphereEntity model sphere =

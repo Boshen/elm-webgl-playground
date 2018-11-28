@@ -1,10 +1,7 @@
-module Route exposing (Route(..), fromUrl, parser)
+module Route exposing (Route(..), fromUrl, routes)
 
-import Browser.Navigation as Nav
-import Html exposing (Attribute)
-import Html.Attributes as Attr
 import Url exposing (Url)
-import Url.Parser as Parser exposing (Parser, oneOf, s, string)
+import Url.Parser as Parser exposing (Parser, oneOf, s)
 
 
 type Route
@@ -12,6 +9,14 @@ type Route
     | Rotate
     | Motion
     | Sphere
+
+
+routes =
+    [ "mandelbrot"
+    , "rotate"
+    , "motion"
+    , "sphere"
+    ]
 
 
 parser : Parser (Route -> a) a

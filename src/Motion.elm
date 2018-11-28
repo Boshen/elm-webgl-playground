@@ -1,15 +1,11 @@
 module Motion exposing (Model, Msg, cmd, defaultModel, init, subscriptions, update, view)
 
-import Browser exposing (Document)
 import Browser.Dom exposing (..)
 import Browser.Events exposing (..)
-import Debug
 import Html exposing (Html)
 import Html.Attributes exposing (height, style, width)
-import Json.Decode as Decode
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Task
-import Time exposing (Posix, posixToMillis)
 import WebGL exposing (Mesh, Shader)
 
 
@@ -65,25 +61,19 @@ subscriptions model =
     onAnimationFrame (\_ -> Tick)
 
 
-view : Model -> Document msg
+view : Model -> Html msg
 view model =
-    let
-        html =
-            WebGL.toHtml
-                [ width (round model.width)
-                , height (round model.height)
-                , style "display" "block"
-                ]
-                [ WebGL.entity
-                    vertexShader
-                    fragmentShader
-                    mesh
-                    (uniforms model)
-                ]
-    in
-    { title = "motion"
-    , body = [ html ]
-    }
+    WebGL.toHtml
+        [ width (round model.width)
+        , height (round model.height)
+        , style "display" "block"
+        ]
+        [ WebGL.entity
+            vertexShader
+            fragmentShader
+            mesh
+            (uniforms model)
+        ]
 
 
 type alias Uniforms =
@@ -97,16 +87,6 @@ uniforms model =
     { u_resolution = vec2 model.width model.height
     , u_time = model.time
     }
-
-
-main : Program {} Model Msg
-main =
-    Browser.document
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
 
 
 

@@ -2,10 +2,10 @@ module Mandelbrot exposing (Model, Msg, cmd, defaultModel, init, subscriptions, 
 
 import Browser exposing (Document)
 import Browser.Dom exposing (..)
-import Browser.Events exposing (..)
-import Debug
+import Browser.Events exposing (onAnimationFrame)
 import Html exposing (Html)
 import Html.Attributes exposing (height, style, width)
+import Html.Events exposing (on, onMouseUp)
 import Json.Decode as Decode
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Task
@@ -97,44 +97,36 @@ update msg model =
     ( m, Cmd.none )
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    if model.zooming then
+        onAnimationFrame (\_ -> Zooming)
+
+    else
+        Sub.none
+
+
 decodeDown =
     Decode.map2 Zoom
         (Decode.field "offsetX" Decode.float)
         (Decode.field "offsetY" Decode.float)
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ onMouseDown decodeDown
-        , onMouseUp (Decode.succeed StopZoom)
-        , if model.zooming then
-            onAnimationFrame (\_ -> Zooming)
-
-          else
-            Sub.none
-        ]
-
-
-view : Model -> Document msg
+view : Model -> Html Msg
 view model =
-    let
-        html =
-            WebGL.toHtml
-                [ width (round model.width)
-                , height (round model.height)
-                , style "display" "block"
-                ]
-                [ WebGL.entity
-                    vertexShader
-                    fragmentShader
-                    mesh
-                    (uniforms model)
-                ]
-    in
-    { title = "mandelbrot"
-    , body = [ html ]
-    }
+    WebGL.toHtml
+        [ width (round model.width)
+        , height (round model.height)
+        , on "mousedown" decodeDown
+        , onMouseUp StopZoom
+        , style "display" "block"
+        ]
+        [ WebGL.entity
+            vertexShader
+            fragmentShader
+            mesh
+            (uniforms model)
+        ]
 
 
 type alias Uniforms =
@@ -152,16 +144,6 @@ uniforms model =
     , u_zoomSize = model.zoom
     , u_maxIterations = model.maxIterations
     }
-
-
-main : Program {} Model Msg
-main =
-    Browser.document
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
 
 
 
