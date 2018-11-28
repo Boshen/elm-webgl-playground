@@ -3,6 +3,7 @@ module Main exposing (Model, Msg(..), init, main, update, view)
 import Browser exposing (Document)
 import Browser.Navigation exposing (Key)
 import Mandelbrot
+import Motion
 import Rotate
 import Route
 import Sphere
@@ -12,6 +13,7 @@ import Url exposing (Url)
 type Model
     = Mandelbrot Mandelbrot.Model
     | Rotate Rotate.Model
+    | Motion Motion.Model
     | Sphere Sphere.Model
 
 
@@ -19,6 +21,7 @@ type Msg
     = NoOp
     | GotMandelbrotMsg Mandelbrot.Msg
     | GotRotate Rotate.Msg
+    | GotMotion Motion.Msg
     | GotSphere Sphere.Msg
 
 
@@ -30,6 +33,9 @@ init flags url key =
 
         Just Route.Rotate ->
             ( Rotate Rotate.defaultModel, Cmd.map GotRotate Rotate.cmd )
+
+        Just Route.Motion ->
+            ( Motion Motion.defaultModel, Cmd.map GotMotion Motion.cmd )
 
         Just Route.Sphere ->
             ( Sphere Sphere.defaultModel, Cmd.map GotSphere Sphere.cmd )
@@ -48,6 +54,10 @@ update msg model =
         ( GotRotate subMsg, Rotate m ) ->
             Rotate.update subMsg m
                 |> updateWith Rotate GotRotate model
+
+        ( GotMotion subMsg, Motion m ) ->
+            Motion.update subMsg m
+                |> updateWith Motion GotMotion model
 
         ( GotSphere subMsg, Sphere m ) ->
             Sphere.update subMsg m
@@ -73,6 +83,9 @@ view model =
         Rotate m ->
             Rotate.view m
 
+        Motion m ->
+            Motion.view m
+
         Sphere m ->
             Sphere.view m
 
@@ -85,6 +98,9 @@ subscriptions model =
 
         Rotate m ->
             Sub.map GotRotate (Rotate.subscriptions m)
+
+        Motion m ->
+            Sub.map GotMotion (Motion.subscriptions m)
 
         Sphere m ->
             Sub.map GotSphere (Sphere.subscriptions m)

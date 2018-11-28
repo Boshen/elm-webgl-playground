@@ -10,6 +10,7 @@ import Url.Parser as Parser exposing (Parser, oneOf, s, string)
 type Route
     = Mandelbrot
     | Rotate
+    | Motion
     | Sphere
 
 
@@ -18,6 +19,7 @@ parser =
     oneOf
         [ Parser.map Mandelbrot (s "mandelbrot")
         , Parser.map Rotate (s "rotate")
+        , Parser.map Motion (s "motion")
         , Parser.map Sphere (s "sphere")
         ]
 

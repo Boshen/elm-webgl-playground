@@ -1,4 +1,4 @@
-module Sphere exposing (Attributes, Model, Msg(..), Uniforms, Varyings, cmd, createIndex, createVertex, defaultModel, fragmentShader, init, latitudeBands, longitudeBands, radius, sphereMesh, subscriptions, uniforms, update, vertexShader, view)
+module Sphere exposing (Model, Msg(..), cmd, defaultModel, init, subscriptions, update, view)
 
 import Browser exposing (Document)
 import Browser.Dom exposing (..)
@@ -18,11 +18,21 @@ import WebGL exposing (Mesh, Shader)
 import WebGL.Settings.DepthTest
 
 
+type Msg
+    = GotViewport Viewport
+    | Tick Float
+    | Randoms (List ( Float, Float ))
+
+
 type alias Model =
     { width : Float
     , height : Float
     , time : Float
     , spheres : List Sphere
+    , light : Sphere
+    , directionalLight : Vec3
+    , directionalColor : Vec3
+    , camera : Vec3
     }
 
 
@@ -30,14 +40,52 @@ type alias Sphere =
     { x : Float
     , y : Float
     , z : Float
-    , v : Float
+    , v : Float -- velocity
+    , r : Float -- radius
+    , c : Vec3 -- color
     }
 
 
-type Msg
-    = GotViewport Viewport
-    | Tick Float
-    | Randoms (List ( Float, Float ))
+type alias SphereUniforms =
+    { model : Mat4
+    , perspective : Mat4
+    , view : Mat4
+    , lightPos : Vec3
+    , lightColor : Vec3
+    , directionalLight : Vec3
+    , directionalColor : Vec3
+    , color : Vec3
+    , camera : Vec3
+    }
+
+
+type alias LightUniforms =
+    { model : Mat4
+    , perspective : Mat4
+    , view : Mat4
+    , color : Vec3
+    , camera : Vec3
+    , directionalLight : Vec3
+    , directionalColor : Vec3
+    }
+
+
+type alias Attributes =
+    { position : Vec3
+    , normal : Vec3
+    }
+
+
+type alias SphereVaryings =
+    { v_normal : Vec3
+    , v_fragPos : Vec3
+    }
+
+
+type alias LightVaryings =
+    { v_normal : Vec3
+    , v_fragPos : Vec3
+    }
 
 
 defaultModel : Model
@@ -46,6 +94,10 @@ defaultModel =
     , height = 0
     , time = 0
     , spheres = []
+    , light = { x = 0, y = 0, z = 0, v = 0, r = 0.1, c = vec3 1 1 0 }
+    , camera = vec3 0 0 -10
+    , directionalLight = vec3 0 0 1
+    , directionalColor = vec3 0.3 0.3 0.3
     }
 
 
@@ -107,70 +159,87 @@ view model =
                 , height (round model.height)
                 , style "display" "block"
                 ]
-                (List.map createSphereEntity model.spheres)
+                (createLightEntity model :: List.map (createSphereEntity model) model.spheres)
     in
     { title = "sphere"
     , body = [ html ]
     }
 
 
-type alias Uniforms =
-    { model : Mat4
-    , perspective : Mat4
-    , view : Mat4
-    }
-
-
-createSphereEntity sphere =
+createSphereEntity model sphere =
     WebGL.entityWith
         [ WebGL.Settings.DepthTest.default ]
-        vertexShader
-        fragmentShader
+        sphereVertexShader
+        sphereFragmentShader
         sphereMesh
-        (uniforms sphere)
+        (sphereUniforms model sphere)
 
 
+createLightEntity model =
+    WebGL.entityWith
+        [ WebGL.Settings.DepthTest.default ]
+        lightVertexShader
+        lightFragmentShader
+        sphereMesh
+        (lightUniforms model)
+
+
+createSpheres : List ( Float, Float ) -> Float -> Float -> List Sphere
 createSpheres randoms width height =
-    List.map2
-        (\( x, z ) v -> Sphere x 0 z (toFloat v))
-        randoms
-        (List.range 1 1)
+    [ { x = 0
+      , y = -0.05
+      , z = 0
+      , v = 0.1
+      , r = 0.3
+      , c = vec3 1 0 0
+      }
+    ]
 
 
 updateSphere : Float -> Sphere -> Sphere
-updateSphere dt sphere =
+updateSphere t sphere =
     { sphere
-        | x = sphere.x + cos dt * sphere.v * 0.04
-        , z = sphere.z + sin dt * sphere.v * 0.05
+        | x = sphere.x + cos t * sphere.v
+        , z = sphere.z + sin t * sphere.v
     }
 
 
-uniforms : Sphere -> Uniforms
-uniforms { x, y, z } =
+sphereUniforms : Model -> Sphere -> SphereUniforms
+sphereUniforms { light, camera, directionalLight, directionalColor } sphere =
     { model =
         Mat4.identity
-            |> Mat4.translate3 x y z
+            |> Mat4.translate3 sphere.x sphere.y sphere.z
             -- |> Mat4.rotate 0 (vec3 0 0 0)
-            |> Mat4.scale3 0.3 0.3 0.3
+            |> Mat4.scale3 sphere.r sphere.r sphere.r
+    , perspective = Mat4.makePerspective 45 1 0.01 100
+    , view = Mat4.makeLookAt camera (vec3 0 0 0) (vec3 0 1 0)
+    , lightPos = vec3 light.x light.y light.z
+    , lightColor = light.c
+    , color = sphere.c
+    , camera = camera
+    , directionalColor = directionalColor
+    , directionalLight = directionalLight
+    }
+
+
+lightUniforms : Model -> LightUniforms
+lightUniforms { light, camera, directionalLight, directionalColor } =
+    { model =
+        Mat4.identity
+            |> Mat4.translate3 light.x light.y light.z
+            -- |> Mat4.rotate 0 (vec3 0 0 0)
+            |> Mat4.scale3 light.r light.r light.r
     , perspective = Mat4.makePerspective 45 1 0.01 100
     , view = Mat4.makeLookAt (vec3 0 1 -10) (vec3 0 0 0) (vec3 0 1 0)
+    , color = light.c
+    , camera = camera
+    , directionalColor = directionalColor
+    , directionalLight = directionalLight
     }
 
 
 
 -- Mesh
-
-
-type alias Attributes =
-    { position : Vec3
-    , color : Vec3
-    , normal : Vec3
-    }
-
-
-type alias Varyings =
-    { vlight : Vec3
-    }
 
 
 latitudeBands : Int
@@ -255,7 +324,6 @@ createVertex lat long =
     in
     Attributes
         (vec3 (radius * x) (radius * y) (radius * z))
-        (vec3 1.0 1.0 1.0)
         (vec3 x y z)
 
 
@@ -271,41 +339,102 @@ createIndex latNumber longNumber =
     [ ( first, second, first + 1 ), ( second, second + 1, first + 1 ) ]
 
 
-vertexShader : Shader Attributes Uniforms Varyings
-vertexShader =
+sphereVertexShader : Shader Attributes SphereUniforms SphereVaryings
+sphereVertexShader =
     [glsl|
         attribute vec3 position;
-        attribute vec3 color;
         attribute vec3 normal;
+
         uniform mat4 perspective;
         uniform mat4 view;
         uniform mat4 model;
-        varying vec3 vlight;
 
-        vec4 lightPosition = vec4(10.0, 20.0, -20.0, 1.0);
-        vec3 ld = vec3(1.0, 1.0, 1.0);
-        vec3 kd = vec3(0.9, 0.5, 0.3);
+        varying vec3 v_normal;
+        varying vec3 v_fragPos;
 
         void main () {
-          vec3 tnorm = normalize(normal);
-          mat4 mvp = perspective * view * model;
-          vec4 eyeCoords = mvp * vec4(position, 1.0);
-          vec3 s = normalize(vec3(lightPosition - eyeCoords));
+          vec4 pos = vec4(position, 1.0);
+          gl_Position =  perspective * view * model * pos;
 
-          vlight = ld * kd * max(dot(s, tnorm), 0.0);
-
-          gl_Position =  mvp * vec4(position, 1.0);
+          v_normal = normal;
+          v_fragPos = vec3(model * pos);
         }
     |]
 
 
-fragmentShader : Shader {} Uniforms Varyings
-fragmentShader =
+sphereFragmentShader : Shader {} SphereUniforms SphereVaryings
+sphereFragmentShader =
     [glsl|
         precision mediump float;
-        varying vec3 vlight;
+        uniform vec3 color;
+        uniform vec3 lightPos;
+        uniform vec3 lightColor;
+        uniform vec3 camera;
+        uniform vec3 directionalLight;
+        uniform vec3 directionalColor;
+
+        varying vec3 v_normal;
+        varying vec3 v_fragPos;
+
 
         void main () {
-          gl_FragColor = vec4(vlight, 1.0);
+          vec3 norm = normalize(v_normal);
+          vec3 lightDir = normalize(lightPos - v_fragPos);
+          vec3 viewDir = normalize(camera - v_fragPos);
+          vec3 reflectDir = reflect(-lightDir, norm);
+
+          vec3 ambient = vec3(0.1, 0.1, 0.1);
+          vec3 diffuse = max(0.0, dot(norm, lightDir)) * lightColor;
+          vec3 specular = 0.5 * pow(max(dot(viewDir, reflectDir), 0.0), 32.0) * lightColor;
+          vec3 directional = max(0.0, dot(norm, -directionalLight)) * directionalColor;
+
+          vec3 result = (ambient + diffuse + specular + directional) * color;
+          gl_FragColor = vec4(result, 1.0);
+        }
+    |]
+
+
+lightVertexShader : Shader Attributes LightUniforms LightVaryings
+lightVertexShader =
+    [glsl|
+        attribute vec3 position;
+        attribute vec3 normal;
+
+        uniform mat4 perspective;
+        uniform mat4 view;
+        uniform mat4 model;
+
+        varying vec3 v_normal;
+        varying vec3 v_fragPos;
+
+        void main () {
+          vec4 pos = vec4(position, 1.0);
+          gl_Position =  perspective * view * model * pos;
+
+          v_normal = normal;
+          v_fragPos = vec3(model * pos);
+        }
+    |]
+
+
+lightFragmentShader : Shader {} LightUniforms LightVaryings
+lightFragmentShader =
+    [glsl|
+        precision mediump float;
+        uniform vec3 color;
+        uniform vec3 directionalLight;
+        uniform vec3 directionalColor;
+
+        varying vec3 v_normal;
+        varying vec3 v_fragPos;
+
+        void main () {
+          vec3 norm = normalize(v_normal);
+
+          vec3 ambient = vec3(0.8, 0.8, 0.8);
+          vec3 directional = max(0.0, dot(norm, -directionalLight)) * directionalColor;
+
+          vec3 result = (ambient + directional) * color;
+          gl_FragColor = vec4(result, 1.0);
         }
     |]
