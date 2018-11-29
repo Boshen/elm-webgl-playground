@@ -1,21 +1,27 @@
 module Main exposing (Model, Msg(..), init, main, update, view)
 
 import Browser exposing (Document, UrlRequest(..))
+import Browser.Dom as Dom exposing (Element)
 import Browser.Navigation as Nav exposing (Key)
 import Html exposing (..)
-import Html.Attributes exposing (href)
+import Html.Attributes exposing (href, id)
 import Html.Events exposing (onClick)
 import Mandelbrot
 import Motion
+import Result exposing (..)
 import Rotate
 import Route
 import Sphere
+import Task
+import Tuple
+import Types exposing (Dimension)
 import Url exposing (Url)
 
 
 type alias Model =
     { key : Key
     , subModel : SubModel
+    , canvasDimension : Dimension
     }
 
 
@@ -35,34 +41,33 @@ type Msg
     | GotRotate Rotate.Msg
     | GotMotion Motion.Msg
     | GotSphere Sphere.Msg
+    | GotCanvasElement Url (Result Dom.Error Element)
+
+
+canvasId =
+    "canvas"
 
 
 init : flags -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
-    let
-        ( subModel, subCmd ) =
-            case Route.fromUrl url of
-                Just Route.Mandelbrot ->
-                    ( Mandelbrot Mandelbrot.defaultModel, Cmd.map GotMandelbrotMsg Mandelbrot.cmd )
-
-                Just Route.Rotate ->
-                    ( Rotate Rotate.defaultModel, Cmd.map GotRotate Rotate.cmd )
-
-                Just Route.Motion ->
-                    ( Motion Motion.defaultModel, Cmd.map GotMotion Motion.cmd )
-
-                Just Route.Sphere ->
-                    ( Sphere Sphere.defaultModel, Cmd.map GotSphere Sphere.cmd )
-
-                Nothing ->
-                    ( NoModel, Cmd.none )
-    in
-    ( Model key subModel, subCmd )
+    ( Model key NoModel { width = 0, height = 0 }
+    , Task.attempt (GotCanvasElement url) (Dom.getElement canvasId)
+    )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.subModel ) of
+        ( GotCanvasElement url e, _ ) ->
+            case e of
+                Ok { element } ->
+                    ( { model | canvasDimension = { width = element.width, height = element.height } }
+                    , Nav.pushUrl model.key <| Url.toString url
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
         ( ClickedLink urlRequest, _ ) ->
             case urlRequest of
                 Internal url ->
@@ -72,7 +77,37 @@ update msg model =
                     ( model, Nav.load url )
 
         ( ChangedUrl url, _ ) ->
-            init {} url model.key
+            let
+                ( subModel, subCmd ) =
+                    case Route.fromUrl url of
+                        Just Route.Mandelbrot ->
+                            Tuple.mapBoth
+                                Mandelbrot
+                                (Cmd.map GotMandelbrotMsg)
+                                (Mandelbrot.init model.canvasDimension)
+
+                        Just Route.Rotate ->
+                            Tuple.mapBoth
+                                Rotate
+                                (Cmd.map GotRotate)
+                                (Rotate.init model.canvasDimension)
+
+                        Just Route.Motion ->
+                            Tuple.mapBoth
+                                Motion
+                                (Cmd.map GotMotion)
+                                (Motion.init model.canvasDimension)
+
+                        Just Route.Sphere ->
+                            Tuple.mapBoth
+                                Sphere
+                                (Cmd.map GotSphere)
+                                (Sphere.init model.canvasDimension)
+
+                        Nothing ->
+                            ( NoModel, Cmd.none )
+            in
+            ( { model | subModel = subModel }, subCmd )
 
         ( GotMandelbrotMsg subMsg, Mandelbrot m ) ->
             Mandelbrot.update subMsg m
@@ -110,13 +145,13 @@ view model =
                     Html.map GotMandelbrotMsg <| Mandelbrot.view m
 
                 Rotate m ->
-                    Rotate.view m
+                    Html.map GotRotate <| Rotate.view m
 
                 Motion m ->
-                    Motion.view m
+                    Html.map GotMotion <| Motion.view m
 
                 Sphere m ->
-                    Sphere.view m
+                    Html.map GotSphere <| Sphere.view m
 
                 _ ->
                     div [] []
@@ -124,7 +159,7 @@ view model =
         body =
             main_
                 []
-                [ navView, right ]
+                [ navView, div [ id canvasId ] [ right ] ]
     in
     { title = ""
     , body = [ body ]

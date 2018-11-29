@@ -1,4 +1,4 @@
-module Mandelbrot exposing (Model, Msg, cmd, defaultModel, init, subscriptions, update, view)
+module Mandelbrot exposing (Model, Msg, defaultModel, init, subscriptions, update, view)
 
 import Browser exposing (Document)
 import Browser.Dom exposing (..)
@@ -10,6 +10,7 @@ import Json.Decode as Decode
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Task
 import Time exposing (Posix, posixToMillis)
+import Types exposing (Dimension)
 import WebGL exposing (Mesh, Shader)
 
 
@@ -27,8 +28,7 @@ type alias Model =
 
 
 type Msg
-    = GotViewport Viewport
-    | Zoom Float Float
+    = Zoom Float Float
     | StopZoom
     | Zooming
 
@@ -37,10 +37,10 @@ maxIterations =
     256
 
 
-defaultModel : Model
-defaultModel =
-    { width = 0
-    , height = 0
+defaultModel : Dimension -> Model
+defaultModel { width, height } =
+    { width = width
+    , height = height
     , x = 0
     , y = 0
     , targetZoomX = 0
@@ -51,14 +51,9 @@ defaultModel =
     }
 
 
-cmd : Cmd Msg
-cmd =
-    Task.perform GotViewport getViewport
-
-
-init : flags -> ( Model, Cmd Msg )
-init _ =
-    ( defaultModel, cmd )
+init : Dimension -> ( Model, Cmd Msg )
+init dimension =
+    ( defaultModel dimension, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -66,12 +61,6 @@ update msg model =
     let
         m =
             case msg of
-                GotViewport { viewport } ->
-                    { model
-                        | width = viewport.width
-                        , height = viewport.height
-                    }
-
                 Zoom offsetX offsetY ->
                     { model
                         | targetZoomX = model.x - model.zoom / 2 + (offsetX / model.width) * model.zoom

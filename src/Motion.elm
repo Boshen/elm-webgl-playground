@@ -1,4 +1,4 @@
-module Motion exposing (Model, Msg, cmd, defaultModel, init, subscriptions, update, view)
+module Motion exposing (Model, Msg, defaultModel, init, subscriptions, update, view)
 
 import Browser.Dom exposing (..)
 import Browser.Events exposing (..)
@@ -6,6 +6,7 @@ import Html exposing (Html)
 import Html.Attributes exposing (height, style, width)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Task
+import Types exposing (Dimension)
 import WebGL exposing (Mesh, Shader)
 
 
@@ -17,26 +18,20 @@ type alias Model =
 
 
 type Msg
-    = GotViewport Viewport
-    | Tick
+    = Tick
 
 
-defaultModel : Model
-defaultModel =
-    { width = 0
-    , height = 0
+defaultModel : Dimension -> Model
+defaultModel { width, height } =
+    { width = width
+    , height = height
     , time = 0
     }
 
 
-cmd : Cmd Msg
-cmd =
-    Task.perform GotViewport getViewport
-
-
-init : flags -> ( Model, Cmd Msg )
-init _ =
-    ( defaultModel, cmd )
+init : Dimension -> ( Model, Cmd Msg )
+init dimension =
+    ( defaultModel dimension, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -44,12 +39,6 @@ update msg model =
     let
         m =
             case msg of
-                GotViewport { viewport } ->
-                    { model
-                        | width = viewport.width
-                        , height = viewport.height
-                    }
-
                 Tick ->
                     { model | time = model.time + 0.01 }
     in
@@ -61,7 +50,7 @@ subscriptions model =
     onAnimationFrame (\_ -> Tick)
 
 
-view : Model -> Html msg
+view : Model -> Html Msg
 view model =
     WebGL.toHtml
         [ width (round model.width)

@@ -4,6 +4,16 @@
   margin: 0;
 }
 
+a {
+  text-decoration: none;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
 header > ul {
   display: flex;
   padding: 0 10px;
@@ -14,6 +24,6 @@ header > ul > li {
   margin-right: 10px;
 }
 
-a {
-  text-decoration: none;
+#canvas {
+  flex: 1;
 }

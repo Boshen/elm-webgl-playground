@@ -1,4 +1,4 @@
-module Sphere exposing (Model, Msg(..), cmd, defaultModel, init, subscriptions, update, view)
+module Sphere exposing (Model, Msg(..), defaultModel, init, subscriptions, update, view)
 
 import Browser exposing (Document)
 import Browser.Dom exposing (..)
@@ -9,16 +9,14 @@ import List
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Random exposing (..)
 import Task
+import Types exposing (Dimension)
 import WebGL exposing (Mesh, Shader)
 import WebGL.Settings.DepthTest
 
 
 type Msg
-    = GotViewport Viewport
-    | Tick Float
-    | Randoms (List ( Float, Float ))
+    = Tick Float
 
 
 type alias Model =
@@ -85,12 +83,12 @@ type alias LightVaryings =
     }
 
 
-defaultModel : Model
-defaultModel =
-    { width = 0
-    , height = 0
+defaultModel : Dimension -> Model
+defaultModel { width, height } =
+    { width = width
+    , height = height
     , time = 0
-    , spheres = []
+    , spheres = createSpheres width height
     , light = { x = 0, y = 0, z = 0, v = 0, r = 0.1, c = vec3 1 1 0 }
     , camera = vec3 0 0 -10
     , directionalLight = vec3 0 0 1
@@ -98,14 +96,9 @@ defaultModel =
     }
 
 
-cmd : Cmd Msg
-cmd =
-    Task.perform GotViewport getViewport
-
-
-init : flags -> ( Model, Cmd Msg )
-init _ =
-    ( defaultModel, cmd )
+init : Dimension -> ( Model, Cmd Msg )
+init dimension =
+    ( defaultModel dimension, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -113,32 +106,13 @@ update msg model =
     let
         m =
             case msg of
-                GotViewport { viewport } ->
-                    { model
-                        | width = viewport.width
-                        , height = viewport.height
-                    }
-
                 Tick dt ->
                     { model
                         | time = model.time + dt
                         , spheres = List.map (updateSphere model.time) model.spheres
                     }
-
-                Randoms randoms ->
-                    { model
-                        | spheres = createSpheres randoms model.width model.height
-                    }
-
-        c =
-            case msg of
-                GotViewport _ ->
-                    Random.generate Randoms (Random.list 1000 <| Random.pair (Random.float -2 2) (Random.float 0 1))
-
-                _ ->
-                    Cmd.none
     in
-    ( m, c )
+    ( m, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
@@ -146,7 +120,7 @@ subscriptions model =
     onAnimationFrameDelta (\dt -> Tick (dt / 1000))
 
 
-view : Model -> Html msg
+view : Model -> Html Msg
 view model =
     WebGL.toHtmlWith
         [ WebGL.alpha True, WebGL.antialias, WebGL.depth 1 ]
@@ -175,8 +149,8 @@ createLightEntity model =
         (lightUniforms model)
 
 
-createSpheres : List ( Float, Float ) -> Float -> Float -> List Sphere
-createSpheres randoms width height =
+createSpheres : Float -> Float -> List Sphere
+createSpheres width height =
     [ { x = 0
       , y = -0.05
       , z = 0
